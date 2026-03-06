@@ -11,30 +11,35 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-
-const sampleMessages = [
-  `Hi John,\n\nI noticed FinTech Corp has been making waves in the financial technology space — congrats on the recent growth!\n\nI'm reaching out because we've helped similar companies automate their outreach and book 3x more product demos. I'd love to show you how it works in a quick 15-minute call.\n\nWould next Tuesday or Wednesday work for you?\n\nBest,\nYour Name`,
-  `Hey Sarah,\n\nCloudScale AI's work in ML infrastructure caught my attention — really impressive platform you've built.\n\nWe specialize in helping AI companies streamline their sales pipeline, and I think there's a great fit. Would you be open to a brief chat this week?\n\nLooking forward to connecting!\n\nCheers`,
-];
+import { messagesApi, type MessageRequest } from "@/lib/api";
 
 export default function AIMessages() {
   const [prompt, setPrompt] = useState("");
-  const [tone, setTone] = useState("professional");
-  const [goal, setGoal] = useState("book-meeting");
+  const [tone, setTone] = useState<MessageRequest["tone"]>("professional");
+  const [goal, setGoal] = useState<MessageRequest["goal"]>("book-meeting");
   const [generatedMessage, setGeneratedMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast.error("Please enter a prompt first");
       return;
     }
     setIsGenerating(true);
-    setTimeout(() => {
-      setGeneratedMessage(sampleMessages[Math.floor(Math.random() * sampleMessages.length)]);
-      setIsGenerating(false);
+    try {
+      const res = await messagesApi.generate({ prompt, tone, goal });
+      setGeneratedMessage(res.message);
       toast.success("Message generated!");
-    }, 1500);
+    } catch (err: unknown) {
+      const msg = (err as Error).message ?? "Generation failed";
+      if (msg.includes("GROQ_API_KEY")) {
+        toast.error("Add your GROQ_API_KEY to backend/.env and restart the server");
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleCopy = () => {
@@ -66,7 +71,7 @@ export default function AIMessages() {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Tone</label>
-              <Select value={tone} onValueChange={setTone}>
+              <Select value={tone} onValueChange={(v) => setTone(v as MessageRequest["tone"])}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="friendly">Friendly</SelectItem>
@@ -77,7 +82,7 @@ export default function AIMessages() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Goal</label>
-              <Select value={goal} onValueChange={setGoal}>
+              <Select value={goal} onValueChange={(v) => setGoal(v as MessageRequest["goal"])}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="book-meeting">Book Meeting</SelectItem>

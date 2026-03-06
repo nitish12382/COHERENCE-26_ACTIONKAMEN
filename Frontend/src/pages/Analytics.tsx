@@ -1,6 +1,7 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { StatCard } from "@/components/StatCard";
-import { Users, Mail, MessageSquare, CalendarCheck, TrendingUp, Target } from "lucide-react";
+import { Users, Mail, MessageSquare, CalendarCheck, TrendingUp, Target, Loader2 } from "lucide-react";
 import {
   AreaChart,
   Area,
@@ -12,37 +13,43 @@ import {
   BarChart,
   Bar,
 } from "recharts";
-
-const stats = [
-  { title: "Leads Contacted", value: "1,847", change: "+234 this week", changeType: "positive" as const, icon: Users },
-  { title: "Emails Sent", value: "3,210", change: "+18% from last month", changeType: "positive" as const, icon: Mail },
-  { title: "Replies Received", value: "342", change: "10.7% reply rate", changeType: "positive" as const, icon: MessageSquare },
-  { title: "Meetings Booked", value: "47", change: "+12 this week", changeType: "positive" as const, icon: CalendarCheck },
-  { title: "Conversion Rate", value: "4.2%", change: "+0.3% improvement", changeType: "positive" as const, icon: TrendingUp },
-  { title: "Open Rate", value: "58.3%", change: "Above industry avg", changeType: "positive" as const, icon: Target },
-];
-
-const replyData = [
-  { week: "W1", replies: 24 },
-  { week: "W2", replies: 31 },
-  { week: "W3", replies: 28 },
-  { week: "W4", replies: 42 },
-  { week: "W5", replies: 38 },
-  { week: "W6", replies: 55 },
-  { week: "W7", replies: 49 },
-  { week: "W8", replies: 67 },
-];
-
-const funnelData = [
-  { stage: "Leads", count: 2847 },
-  { stage: "Contacted", count: 1847 },
-  { stage: "Opened", count: 1076 },
-  { stage: "Replied", count: 342 },
-  { stage: "Meeting", count: 47 },
-  { stage: "Converted", count: 19 },
-];
+import { analyticsApi, type DashboardStats, type ReplyTrendPoint, type FunnelPoint } from "@/lib/api";
+import { toast } from "sonner";
 
 export default function Analytics() {
+  const [dashData, setDashData] = useState<DashboardStats | null>(null);
+  const [replyData, setReplyData] = useState<ReplyTrendPoint[]>([]);
+  const [funnelData, setFunnelData] = useState<FunnelPoint[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      analyticsApi.dashboard(),
+      analyticsApi.replyTrend(),
+      analyticsApi.funnel(),
+    ])
+      .then(([dash, trend, funnel]) => {
+        setDashData(dash);
+        setReplyData(trend);
+        setFunnelData(funnel);
+      })
+      .catch((e: unknown) => toast.error((e as Error).message))
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  const stats = dashData
+    ? [
+        { title: "Total Leads", value: dashData.stats.total_leads.toLocaleString(), change: "All-time", changeType: "positive" as const, icon: Users },
+        { title: "Emails Sent", value: dashData.campaign_performance.reduce((s, c) => s + c.sent, 0).toLocaleString(), change: "Across campaigns", changeType: "positive" as const, icon: Mail },
+        { title: "Replies Received", value: String(dashData.stats.replies_received), change: "Total replies", changeType: "positive" as const, icon: MessageSquare },
+        { title: "Active Campaigns", value: String(dashData.stats.active_campaigns), change: "Currently running", changeType: "neutral" as const, icon: CalendarCheck },
+        { title: "Conversion Rate", value: `${dashData.stats.conversion_rate}%`, change: "Leads → Converted", changeType: "positive" as const, icon: TrendingUp },
+        { title: "Avg Reply Rate", value: dashData.campaign_performance.length > 0
+          ? `${(dashData.campaign_performance.reduce((s, c) => s + c.rate, 0) / dashData.campaign_performance.length).toFixed(1)}%`
+          : "0%", change: "Across campaigns", changeType: "positive" as const, icon: Target },
+      ]
+    : [];
+
   return (
     <div className="space-y-6 max-w-7xl">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -50,6 +57,12 @@ export default function Analytics() {
         <p className="text-muted-foreground mt-1">Track your outreach performance and metrics</p>
       </motion.div>
 
+      {isLoading ? (
+        <div className="flex items-center justify-center h-40">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {stats.map((stat, i) => (
           <motion.div key={stat.title} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
@@ -107,6 +120,8 @@ export default function Analytics() {
           </ResponsiveContainer>
         </motion.div>
       </div>
+        </>
+      )}
     </div>
   );
 }
